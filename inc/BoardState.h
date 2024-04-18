@@ -52,7 +52,7 @@ public:
 	}
 
 	bool addCoordinate(int indexX, int indexY, color colorValue) {
-		if (!Coordinate::isValidCoordinate(indexX, indexY) || colorValue != empty) {
+		if (!Coordinate::isValidCoordinate(indexX, indexY) || colorValue == empty) {
 			return false;
 		}
 

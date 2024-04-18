@@ -1,4 +1,4 @@
-#include "D:\project\C++Project\cpp\inc\MCTreeSearch.h"
+#include "../inc/MCTreeSearch.h"
 
 vector<vector<int>> directions = {
     {-1, 0}, // 上
@@ -11,7 +11,7 @@ vector<vector<int>> directions = {
 
 BoardState::color allyColor = BoardState::blue;
 
-mutex mtx;
+int actions::maxUseableAction = 121;
 
 void MCTreeSearch::init(BoardState* board) {
 	root = new MCTreeNode();
@@ -66,11 +66,9 @@ MCTreeNode* MCTreeSearch::select(MCTreeNode* node) {
 		return *next(node->children.begin(), rand() % node->children.size());
 	}
 	else{//exploit, select the best child node
-		mtx.lock();
 		while (!node->isEndState && node->isFullyExpanded) {
 			node = getBestChild(node);
 		}
-		mtx.unlock();
 	}
 	return node;
 }
@@ -149,13 +147,13 @@ void MCTreeSearch::backpropagate(MCTreeNode* node, double result) {
 	}
 }
 
+BoardState::color doAction(BoardState::color player) {
+	return player == BoardState::color::red ? BoardState::color::blue : BoardState::color::red;
+}
+
 //TODO: evaluate the board when the rollout didnt reach the end state
 double MCTreeSearch::evaluate(BoardState* board) {
 	return 0.5;
-}
-
-BoardState::color doAction(BoardState::color player) {
-	return player == BoardState::color::red ? BoardState::color::blue : BoardState::color::red;
 }
 
 //TODO: check
@@ -170,13 +168,13 @@ int isEndState(BoardState* oneBoardState, BoardState::color player) {
     // 对于蓝色玩家，我们检查从左到右的路径
     if (player == BoardState::color::red) {
         for (int i = 0; i < size; i++) {
-            if ((*oneBoardState)[i][0] == player && dfs(oneBoardState, i, 0, visited, player)) {
+            if ((*oneBoardState)[0][i] == player && dfs(oneBoardState, 0, i, visited, player)) {
                 return allyColor == player ? 1 : -1;
             }
         }
     } else {
         for (int i = 0; i < size; i++) {
-            if ((*oneBoardState)[0][i] == player && dfs(oneBoardState, 0, i, visited, player)) {
+            if ((*oneBoardState)[i][0] == player && dfs(oneBoardState, i, 0, visited, player)) {
                 return allyColor == player ? 1 : -1;
             }
         }
@@ -186,12 +184,12 @@ int isEndState(BoardState* oneBoardState, BoardState::color player) {
     return 0;
 }
 
-bool dfs(BoardState* oneBoardState, int x, int y, std::vector<std::vector<bool>>& visited, BoardState::color player) {
+bool dfs(BoardState* oneBoardState, int x, int y, vector<vector<bool>>& visited, BoardState::color player) {
     // 检查是否到达了边界
-    if (player == BoardState::color::red && y == oneBoardState->boardSize - 1) {
+    if (player == BoardState::red && x == oneBoardState->boardSize - 1) {
         return true;
     }
-    if (player == BoardState::color::blue && x == oneBoardState->boardSize - 1) {
+    if (player == BoardState::blue && y == oneBoardState->boardSize - 1) {
         return true;
     }
 
@@ -225,8 +223,10 @@ double getScore(BoardState* board, int isWin)
 void actions::init(BoardState* board) {
 	for (int i = 0; i < SIZE; i++) 
 		for (int j = 0; j < SIZE; j++) 
-			if (board->getCoordinate(i, j) == BoardState::empty)
+			if (board->getCoordinate(i, j) == BoardState::empty) {
 				useableAction.insert(Coordinate(i, j));
+				if(useableAction.size() > maxUseableAction) return;
+			}
 }
 
 int actions::size() const {
@@ -240,7 +240,7 @@ void MCTreeNode::init(MCTreeNode* parent, BoardState* board) {
 	if (parent != nullptr)
 		this->player = doAction(parent->player);
 	else 
-		this->player = BoardState::color::red;
+		this->player = allyColor;
 
 	UseableActions.init(board);
 }

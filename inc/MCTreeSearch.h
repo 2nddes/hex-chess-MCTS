@@ -25,6 +25,9 @@ struct hash_pair {
 struct actions {
 	unordered_set<Coordinate, hash_pair>       useableAction;
 
+	//limit number of useable actions
+	static int maxUseableAction;
+
 	void init(BoardState* board);
 	int  size() const;//return the number of useable actions
 };
@@ -65,7 +68,7 @@ public:
 	Coordinate getRes() const;
 
 	//limit the number of (select, expand, rollout and backpropagate)
-	int searchLimitCount = 1000;
+	int searchLimitCount = 10000;
 
 	//limit the depth of the search tree
 	int searchDepth      = 5;
