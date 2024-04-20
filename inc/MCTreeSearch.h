@@ -2,9 +2,9 @@
 #define MCTRREESEARCH_H
 
 #include<bits/stdc++.h>
+#include"BoardState.h"
 #include<unordered_map>
 #include<unordered_set>
-#include"BoardState.h"
 
 int    isEndState(BoardState* board, BoardState::color player);
 bool   dfs(BoardState* oneBoardState, int x, int y, vector<vector<bool>>& visited, BoardState::color player);
@@ -81,30 +81,38 @@ public:
 	//number of threads for parallel search
 	const static int threadNum        = 20;
 
-	//balance the exploration and exploitation, range from 0 to 1, 0 means pure exploitation, 1 means pure exploration
-	const static double epsilon;
-
 	//added score if neighbour is ally
-	const static int adjoinAllyPT     = 10;
+	const static int adjoinAllyPT     = 5;
 
 	//added score if virtual neighbour is ally
-	const static int virtAdjoinAllyPT = 20;
+	const static int virtAdjoinAllyPT = 50;
+
+	//added score if its able to block others' virtual connection
+	const static int virAdjoinEnemyPT = 40;
 
 	//added if half blocked virtual connection
 	const static int halfBlockedPT    = 80;
 
+	//keep direction
+	const static int keepDirectionPT  = 30;
+
+	//balance the exploration and exploitation, range from 0 to 1, 0 means pure exploitation, 1 means pure exploration
+	const static double epsilon;
+
+	//ally split weight, bigger means prefer to integrate
+	const static double allySplitWeight;
+
 private:
 	MCTreeNode* root = nullptr;
-
 
 	MCTreeNode* select(MCTreeNode* node);
 	MCTreeNode* getBestChild(MCTreeNode* node);
 	MCTreeNode* expand(MCTreeNode* node);
-	double      rollout(BoardState* board, BoardState::color player, Coordinate doneAction);
+	double      rollout(BoardState* board, BoardState::color player, Coordinate doneAction, int treeDepth);
 	void        backpropagate(MCTreeNode* node, double result);
 
 
-	double      evaluate(BoardState* board);
+	double      evaluate(BoardState* board, int depth);
 };
 
 #endif // !MCTRREESEARCH_H

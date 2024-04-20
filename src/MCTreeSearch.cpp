@@ -1,5 +1,5 @@
 #include "../inc/MCTreeSearch.h"
-//#define DEBUG
+#define DEBUG
 vector<vector<int>> directions = {
     {0, 1}, // 右
     {1, 0}, // 下
@@ -21,7 +21,9 @@ BoardState::color allyColor = BoardState::blue;
 
 int actions::maxUseableAction = 121;
 
-const double MCTreeSearch::epsilon = 0.0;
+const double MCTreeSearch::epsilon = 0.5;
+
+const double MCTreeSearch::allySplitWeight = 0.4;
 
 void MCTreeSearch::init(BoardState* board) {
 	root = new MCTreeNode();
@@ -68,11 +70,11 @@ void MCTreeSearch::search() {
 			backpropagate(expandedNode, result);
 			continue;
 		}
-		double result = rollout(expandedNode->board, expandedNode->player, expandedNode->doneAction);
+		double result = rollout(expandedNode->board, expandedNode->player, expandedNode->doneAction, expandedNode->depth);
 		backpropagate(expandedNode, result);
 	}
-	cout << "search count: " << count << endl;
 #ifdef DEBUG
+	cout << "search count: " << count << endl;
 #endif
 }
 
@@ -137,7 +139,7 @@ MCTreeNode* MCTreeSearch::expand(MCTreeNode* node) {
 	return node;
 }
 
-double MCTreeSearch::rollout(BoardState* board, BoardState::color player, Coordinate doneAction) {
+double MCTreeSearch::rollout(BoardState* board, BoardState::color player, Coordinate doneAction, int treeDepth) {
 	BoardState* tempBoard = new BoardState(*board);
 	BoardState::color tempPlayer = player;
 	int depth = 0;
@@ -145,7 +147,7 @@ double MCTreeSearch::rollout(BoardState* board, BoardState::color player, Coordi
 	while (!isWin) {
 		//limit the depth of the rollout
 		//when didnt reach the end state, use the score to evaluate the board
-		if (depth++ > maxRolloutDepth) return evaluate(board);
+		if (depth++ > maxRolloutDepth) return evaluate(board, treeDepth);
 
 		int x = rand() % SIZE;//TODO: change to random action
 		int y = rand() % SIZE;//such as select the surrounding empty cell
@@ -168,12 +170,17 @@ void MCTreeSearch::backpropagate(MCTreeNode* node, double result) {
 }
 
 BoardState::color doAction(BoardState::color player) {
-	return player == BoardState::color::red ? BoardState::color::blue : BoardState::color::red;
+	return player == BoardState::red ? BoardState::blue : BoardState::red;
 }
 
 void MCTreeNode::initNodeScore() {
+	if(depth > 2)return;
 	Coordinate act = doneAction;
+	board->deleteCoordinate(act, doAction(player));
+	
 	int midX1, midY1, midX2, midY2;
+
+	//adjoin virtual ally
 	for(auto& dir : virtualDirections) {
 		int x = act.indexX + dir[0];
 		int y = act.indexY + dir[1];
@@ -194,16 +201,42 @@ void MCTreeNode::initNodeScore() {
 			midY2 = act.indexY + dir[1];
 		}
 		if (isValid(x, y)){
-			if((*board)[x][y] == allyColor && (*board)[midX1][midY1] != -allyColor && (*board)[midX2][midY2] != -allyColor)
+
+			//keep the direction of the ally
+			if(allyColor == BoardState::blue){
+				if(x < SIZE / 2 && dir[0] == -1 && dir[1] == 2){
+					score += MCTreeSearch::keepDirectionPT;
+				}
+				else if(dir[0] == 1 && dir[1] == -2){
+					score += MCTreeSearch::keepDirectionPT;
+				}
+			}
+			else if(allyColor == BoardState::red){
+				if(y < SIZE / 2 && dir[0] == 2 && dir[1] == -1){
+					score += MCTreeSearch::keepDirectionPT;
+				}
+				else if(dir[0] == -2 && dir[1] == 1){
+					score += MCTreeSearch::keepDirectionPT;
+				}
+			}
+
+
+			//make virtual link
+			if((*board)[x][y] == allyColor && (*board)[midX1][midY1] == BoardState::empty && (*board)[midX2][midY2] == BoardState::empty)
 				score += MCTreeSearch::virtAdjoinAllyPT;
+			//block others' virtual link
+			else if((*board)[x][y] == -allyColor && (*board)[midX1][midY1] == BoardState::empty && (*board)[midX2][midY2] == BoardState::empty)
+				score += MCTreeSearch::virAdjoinEnemyPT;
 		}
 	}
+
+	//adjoin ally
 	for(auto& dir : directions) {
 		int x = act.indexX + dir[0];
 		int y = act.indexY + dir[1];
 		if (isValid(x, y)){
 			if((*board)[x][y] == allyColor) 
-				score += MCTreeSearch::adjoinAllyPT;
+				score += MCTreeSearch::adjoinAllyPT;//adjoin ally
 			else if((*board)[x][y] == -allyColor) {
 				if(dir[0] == 0){
 					midX1 = x + 1;
@@ -223,16 +256,21 @@ void MCTreeNode::initNodeScore() {
 					midX2 = act.indexX;
 					midY2 = y;
 				}
-				if(isValid(midX1, midY1) && isValid(midX2, midY2))
+				//Fill the virtual nodes that are about to be occupied
+				if(isValid(midX1, midY1) && isValid(midX2, midY2)) {
 					if((*board)[midX1][midY1] == allyColor && (*board)[midX2][midY2] == allyColor)
+					{	
 						score += MCTreeSearch::halfBlockedPT;
+					}
+				}
 			}
 		}
 	}
+	board->addCoordinate(act, doAction(player));
 }
 
 //TODO: evaluate the board when the rollout didnt reach the end state
-double MCTreeSearch::evaluate(BoardState* board) {
+double MCTreeSearch::evaluate(BoardState* board, int depth) {
     int groups = 0;
     vector<vector<bool>> visited(SIZE, vector<bool>(SIZE, false));
 
@@ -244,8 +282,8 @@ double MCTreeSearch::evaluate(BoardState* board) {
             }
         }
     }
-
-    return 1.0/groups;
+	//对当前的棋局, 前期, 鼓励分组, 后期, 鼓励连通
+    return MCTreeSearch::allySplitWeight * pow(1.11, depth) / groups;
 }
 
 void dfsGroup(BoardState* board, vector<vector<bool>>& visited, int i, int j, BoardState::color player) {
