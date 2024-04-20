@@ -1,17 +1,27 @@
 #include "../inc/MCTreeSearch.h"
-
+//#define DEBUG
 vector<vector<int>> directions = {
-    {-1, 0}, // 上
-    {1, 0}, // 下
-    {0, -1}, // 左
     {0, 1}, // 右
+    {1, 0}, // 下
     {-1, 1}, // 右上
-    {1, -1} // 左下
+    {1, -1}, // 左下
+    {-1, 0}, // 上
+    {0, -1} // 左
+};
+vector<vector<int>> virtualDirections = {
+	{-1, -1},
+	{1, -2},
+	{2, -1},
+	{1, 1},
+	{-1, 2},
+	{-2, 1}
 };
 
 BoardState::color allyColor = BoardState::blue;
 
 int actions::maxUseableAction = 121;
+
+const double MCTreeSearch::epsilon = 0.0;
 
 void MCTreeSearch::init(BoardState* board) {
 	root = new MCTreeNode();
@@ -21,20 +31,18 @@ void MCTreeSearch::init(BoardState* board) {
 Coordinate MCTreeSearch::getRes() const{
 	MCTreeNode* bestNode = nullptr;
 	double bestScore = -DBL_MAX;
-	double ucb = 0.0;
+	double point = 0.0;
 
 	assert(root != nullptr);
 	assert(root->children.size() > 0);
 	assert(root->numVisits > 0);
 
-	double log_root_numVisits = log(root->numVisits);
 	for (const auto& child : root->children) {
 		assert(child->numVisits > 0);
 
-		ucb = child->score / (double)child->numVisits 
-			+ 1.41 * sqrt(log_root_numVisits / child->numVisits);
-		if (ucb > bestScore) {
-			bestScore = ucb;
+		point = child->score / (double)child->numVisits;
+		if (point > bestScore) {//TODO debug: check diff between bestNode and point 0,5(2,4)(3,2)
+			bestScore = point;
 			bestNode = child;
 		}
 	}
@@ -42,9 +50,17 @@ Coordinate MCTreeSearch::getRes() const{
 	return bestNode->doneAction;
 }
 
-
 void MCTreeSearch::search() {
-	for (int i = 0; i < searchLimitCount; i++) {
+	int count = 0;
+#ifndef DEBUG
+	//限值搜索时间为1s
+	clock_t start = clock();
+	for (;;) {
+		if ((double)(clock() - start) / CLOCKS_PER_SEC > 0.95) break;
+#else
+	while (count < searchLimitCount) {
+#endif
+		count++;
 		MCTreeNode* node = select(root);
 		MCTreeNode* expandedNode = expand(node);
 		if(expandedNode->isEndState){
@@ -52,9 +68,12 @@ void MCTreeSearch::search() {
 			backpropagate(expandedNode, result);
 			continue;
 		}
-		double result = rollout(expandedNode->board, expandedNode->player);
+		double result = rollout(expandedNode->board, expandedNode->player, expandedNode->doneAction);
 		backpropagate(expandedNode, result);
 	}
+	cout << "search count: " << count << endl;
+#ifdef DEBUG
+#endif
 }
 
 MCTreeNode* MCTreeSearch::select(MCTreeNode* node) {
@@ -106,6 +125,7 @@ MCTreeNode* MCTreeSearch::expand(MCTreeNode* node) {
 		newNode->isEndState = isEndState(newBoard, allyColor);
 		newNode->player = doAction(node->player);
 		newNode->depth = node->depth + 1;
+		newNode->initNodeScore();
 
 		node->children.insert(newNode);
 		
@@ -117,7 +137,7 @@ MCTreeNode* MCTreeSearch::expand(MCTreeNode* node) {
 	return node;
 }
 
-double MCTreeSearch::rollout(BoardState* board, BoardState::color player) {
+double MCTreeSearch::rollout(BoardState* board, BoardState::color player, Coordinate doneAction) {
 	BoardState* tempBoard = new BoardState(*board);
 	BoardState::color tempPlayer = player;
 	int depth = 0;
@@ -125,7 +145,7 @@ double MCTreeSearch::rollout(BoardState* board, BoardState::color player) {
 	while (!isWin) {
 		//limit the depth of the rollout
 		//when didnt reach the end state, use the score to evaluate the board
-		if (depth++ > maxRolloutDepth) return evaluate(tempBoard);
+		if (depth++ > maxRolloutDepth) return evaluate(board, doneAction);
 
 		int x = rand() % SIZE;//TODO: change to random action
 		int y = rand() % SIZE;//such as select the surrounding empty cell
@@ -151,12 +171,72 @@ BoardState::color doAction(BoardState::color player) {
 	return player == BoardState::color::red ? BoardState::color::blue : BoardState::color::red;
 }
 
-//TODO: evaluate the board when the rollout didnt reach the end state
-double MCTreeSearch::evaluate(BoardState* board) {
-	return 0.5;
+void MCTreeNode::initNodeScore() {
+	Coordinate act = doneAction;
+	int midX1, midY1, midX2, midY2;
+	for(auto& dir : virtualDirections) {
+		int x = act.indexX + dir[0];
+		int y = act.indexY + dir[1];
+		if(dir[1] == 2 || dir[1] == -2){
+			midX1 = act.indexX;
+			midX2 = act.indexX + dir[0];
+			midY1 = midY2 = act.indexY + dir[1] / 2;
+		}
+		else if(dir[0] == 2 || dir[0] == -2){
+			midY1 = act.indexY;
+			midY2 = act.indexY + dir[1];
+			midX1 = midX2 = act.indexX + dir[0] / 2;
+		}
+		else {
+			midX1 = act.indexX + dir[0];
+			midY1 = act.indexY;
+			midX2 = act.indexX;
+			midY2 = act.indexY + dir[1];
+		}
+		if (isValid(x, y)){
+			if((*board)[x][y] == allyColor && (*board)[midX1][midY1] != -allyColor && (*board)[midX2][midY2] != -allyColor)
+				score += MCTreeSearch::virtAdjoinAllyPT;
+		}
+	}
+	for(auto& dir : directions) {
+		int x = act.indexX + dir[0];
+		int y = act.indexY + dir[1];
+		if (isValid(x, y)){
+			if((*board)[x][y] == allyColor) 
+				score += MCTreeSearch::adjoinAllyPT;
+			else if((*board)[x][y] == -allyColor) {
+				if(dir[0] == 0){
+					midX1 = x + 1;
+					midX2 = x - 1;
+					midY1 = max(y, act.indexY);
+					midY2 = min(y, act.indexY);
+				}
+				else if(dir[1] == 0){
+					midY1 = y + 1;
+					midY2 = y - 1;
+					midX1 = min(x, act.indexX);
+					midX2 = max(x, act.indexX);
+				}
+				else {
+					midX1 = x;
+					midY1 = act.indexY;
+					midX2 = act.indexX;
+					midY2 = y;
+				}
+				if(isValid(midX1, midY1) && isValid(midX2, midY2))
+					if((*board)[midX1][midY1] == allyColor && (*board)[midX2][midY2] == allyColor)
+						score += MCTreeSearch::halfBlockedPT;
+			}
+		}
+	}
 }
 
-//TODO: check
+//TODO: evaluate the board when the rollout didnt reach the end state
+double MCTreeSearch::evaluate(BoardState* board, Coordinate doneAction) {
+	return 1.0;
+}
+
+
 int isEndState(BoardState* oneBoardState, BoardState::color player) {
     // 获取棋盘大小
     int size = oneBoardState->boardSize;
@@ -200,7 +280,7 @@ bool dfs(BoardState* oneBoardState, int x, int y, vector<vector<bool>>& visited,
     for (auto& dir : directions) {
         int newX = x + dir[0];
         int newY = y + dir[1];
-        if (isValid(newX, newY, oneBoardState->boardSize) && !visited[newX][newY] && (*oneBoardState)[newX][newY] == player) {
+        if (isValid(newX, newY) && !visited[newX][newY] && (*oneBoardState)[newX][newY] == player) {
             if (dfs(oneBoardState, newX, newY, visited, player)) {
                 return true;
             }
@@ -210,11 +290,10 @@ bool dfs(BoardState* oneBoardState, int x, int y, vector<vector<bool>>& visited,
     return false;
 }
 
-bool isValid(int x, int y, int size) {
-    return x >= 0 && y >= 0 && x < size && y < size;
+bool isValid(int x, int y) {
+    return x >= 0 && y >= 0 && x < SIZE && y < SIZE;
 }
 
-//TODO: calculate the score of the board when the rollout reach the end state
 double getScore(BoardState* board, int isWin)
 {
 	return (double)isWin * 100;

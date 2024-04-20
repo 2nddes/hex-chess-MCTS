@@ -33,6 +33,9 @@ int main(void) {
 	if (x != -1) board[x][y] = BoardState::red;
 	else allyColor = BoardState::red;
 
+	if(allyColor == BoardState::red && x == -1)
+		{cout << "1 2" << endl;return 0;}
+
 	MCTreeSearch mcts = *(new MCTreeSearch());
 	mcts.init(&board);
 

@@ -8,7 +8,7 @@
 
 int    isEndState(BoardState* board, BoardState::color player);
 bool   dfs(BoardState* oneBoardState, int x, int y, std::vector<std::vector<bool>>& visited, BoardState::color player);
-bool   isValid(int x, int y, int size);
+bool   isValid(int x, int y);
 double getScore(BoardState* board, int isWin);
 BoardState::color doAction(BoardState::color player);
 
@@ -53,6 +53,7 @@ struct MCTreeNode
 	actions    UseableActions;
 
 	void   init(MCTreeNode* parent, BoardState* board);
+	void   initNodeScore();//Evaluate node values based on heuristics
 	double getUCB();
 };
 
@@ -68,19 +69,28 @@ public:
 	Coordinate getRes() const;
 
 	//limit the number of (select, expand, rollout and backpropagate)
-	int searchLimitCount = 10000;
+	const static int searchLimitCount = 10000;
 
 	//limit the depth of the search tree
-	int searchDepth      = 5;
+	const static int searchDepth      = 5;
 
 	//limit the depth of the rollout, when didnt reach the end state, use the score to evaluate the board
-	int maxRolloutDepth  = 10;
+	const static int maxRolloutDepth  = 10;
 
 	//number of threads for parallel search
-	int threadNum        = 20;
+	const static int threadNum        = 20;
 
 	//balance the exploration and exploitation, range from 0 to 1, 0 means pure exploitation, 1 means pure exploration
-	double epsilon       = 0.5;
+	const static double epsilon;
+
+	//added score if neighbour is ally
+	const static int adjoinAllyPT     = 10;
+
+	//added score if virtual neighbour is ally
+	const static int virtAdjoinAllyPT = 20;
+
+	//added if half blocked virtual connection
+	const static int halfBlockedPT    = 80;
 
 private:
 	MCTreeNode* root = nullptr;
@@ -89,10 +99,11 @@ private:
 	MCTreeNode* select(MCTreeNode* node);
 	MCTreeNode* getBestChild(MCTreeNode* node);
 	MCTreeNode* expand(MCTreeNode* node);
-	double      rollout(BoardState* board, BoardState::color player);
+	double      rollout(BoardState* board, BoardState::color player, Coordinate doneAction);
 	void        backpropagate(MCTreeNode* node, double result);
 
-	double      evaluate(BoardState* board);
+
+	double      evaluate(BoardState* board, Coordinate doneAction);
 };
 
 #endif // !MCTRREESEARCH_H
