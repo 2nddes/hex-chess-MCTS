@@ -7,10 +7,11 @@
 #include"BoardState.h"
 
 int    isEndState(BoardState* board, BoardState::color player);
-bool   dfs(BoardState* oneBoardState, int x, int y, std::vector<std::vector<bool>>& visited, BoardState::color player);
+bool   dfs(BoardState* oneBoardState, int x, int y, vector<vector<bool>>& visited, BoardState::color player);
 bool   isValid(int x, int y);
 double getScore(BoardState* board, int isWin);
 BoardState::color doAction(BoardState::color player);
+void dfsGroup(BoardState* board, vector<vector<bool>>& visited, int i, int j, BoardState::color player);
 
 //hash function for Coordinate
 struct hash_pair {
@@ -103,7 +104,7 @@ private:
 	void        backpropagate(MCTreeNode* node, double result);
 
 
-	double      evaluate(BoardState* board, Coordinate doneAction);
+	double      evaluate(BoardState* board);
 };
 
 #endif // !MCTRREESEARCH_H

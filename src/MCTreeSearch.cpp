@@ -41,7 +41,7 @@ Coordinate MCTreeSearch::getRes() const{
 		assert(child->numVisits > 0);
 
 		point = child->score / (double)child->numVisits;
-		if (point > bestScore) {//TODO debug: check diff between bestNode and point 0,5(2,4)(3,2)
+		if (point > bestScore) {
 			bestScore = point;
 			bestNode = child;
 		}
@@ -145,7 +145,7 @@ double MCTreeSearch::rollout(BoardState* board, BoardState::color player, Coordi
 	while (!isWin) {
 		//limit the depth of the rollout
 		//when didnt reach the end state, use the score to evaluate the board
-		if (depth++ > maxRolloutDepth) return evaluate(board, doneAction);
+		if (depth++ > maxRolloutDepth) return evaluate(board);
 
 		int x = rand() % SIZE;//TODO: change to random action
 		int y = rand() % SIZE;//such as select the surrounding empty cell
@@ -232,8 +232,32 @@ void MCTreeNode::initNodeScore() {
 }
 
 //TODO: evaluate the board when the rollout didnt reach the end state
-double MCTreeSearch::evaluate(BoardState* board, Coordinate doneAction) {
-	return 1.0;
+double MCTreeSearch::evaluate(BoardState* board) {
+    int groups = 0;
+    vector<vector<bool>> visited(SIZE, vector<bool>(SIZE, false));
+
+    for (int i = 0; i < SIZE; ++i) {
+        for (int j = 0; j < SIZE; ++j) {
+            if ((*board)[i][j] == allyColor && !visited[i][j]) {
+                dfsGroup(board, visited, i, j, allyColor);
+                ++groups;
+            }
+        }
+    }
+
+    return 1.0/groups;
+}
+
+void dfsGroup(BoardState* board, vector<vector<bool>>& visited, int i, int j, BoardState::color player) {
+    if (!isValid(i, j) || visited[i][j] || (*board)[i][j] != player) {
+        return;
+    }
+
+    visited[i][j] = true;
+
+	for(auto& dir : directions){
+		dfsGroup(board, visited, i + dir[0], j + dir[1], player);
+	}
 }
 
 
