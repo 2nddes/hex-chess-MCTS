@@ -308,16 +308,16 @@ int isEndState(BoardState* oneBoardState, BoardState::color player) {
 
     // 对于红色玩家，我们检查从顶部到底部的路径
     // 对于蓝色玩家，我们检查从左到右的路径
-    if (player == BoardState::color::red) {
+    if (player == BoardState::red) {
         for (int i = 0; i < size; i++) {
             if ((*oneBoardState)[0][i] == player && dfs(oneBoardState, 0, i, visited, player)) {
-                return allyColor == player ? 1 : -1;
+                return allyColor == BoardState::red ? 1 : -1;
             }
         }
     } else {
         for (int i = 0; i < size; i++) {
             if ((*oneBoardState)[i][0] == player && dfs(oneBoardState, i, 0, visited, player)) {
-                return allyColor == player ? 1 : -1;
+                return allyColor == BoardState::blue ? 1 : -1;
             }
         }
     }
